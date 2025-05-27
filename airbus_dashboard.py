@@ -1,3 +1,34 @@
+import pandas as pd
+from suppliers_data import SUPPLIERS
+
+def flatten_suppliers(suppliers):
+    rows = []
+    for s in suppliers:
+        for site in s["sites"]:
+            rows.append({
+                "Supplier": s["name"],
+                "Component": s["component"],
+                "Criticality": s["criticality"],
+                "Dual Sourcing": "Yes" if s["dual_sourcing"] else "No",
+                "City": site["city"],
+                "Country": site["country"],
+                "latitude": site["lat"],     # IMPORTANT: colonne nommée latitude
+                "longitude": site["lon"],    # IMPORTANT: colonne nommée longitude
+                "Stock Days": site["stock_days"],
+                "Lead Time": site["lead_time"],
+                "On-Time Delivery": site.get("on_time_delivery", None),
+                "Incidents": site.get("incidents", None)
+            })
+    return pd.DataFrame(rows)
+
+# Exemple d'utilisation
+df = flatten_suppliers(SUPPLIERS)
+print(df.head())
+
+# Pour la carte Streamlit :
+import streamlit as st
+st.map(df[["latitude", "longitude"]])
+
 import streamlit as st
 import pandas as pd
 from supply_chain_utils import enrich_suppliers_with_risk, simulate_scenario
