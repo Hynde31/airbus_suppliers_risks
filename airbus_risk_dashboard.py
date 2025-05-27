@@ -3,7 +3,9 @@ import pandas as pd
 import os
 from suppliers_data import SUPPLIERS
 
+# La ligne ci-dessous doit être la toute première commande Streamlit !
 st.set_page_config(page_title="Airbus Suppliers Risk Dashboard", layout="wide")
+
 # --------- DATA FLATTENING ---------
 def flatten_suppliers(suppliers):
     rows = []
@@ -28,7 +30,6 @@ def flatten_suppliers(suppliers):
 df = flatten_suppliers(SUPPLIERS)
 
 # --------- STREAMLIT APP SETUP ---------
-st.set_page_config(page_title="Airbus Suppliers Risk Dashboard", layout="wide")
 st.title("Airbus Suppliers Risk Dashboard")
 
 # Affichage du logo si présent
@@ -134,6 +135,3 @@ else:
 
 # --------- FOOTER ---------
 st.markdown("""
----
-Developed for Airbus - Supply Chain Digital Twin · [2025]
-""")
