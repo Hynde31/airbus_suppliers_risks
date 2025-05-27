@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
+import os
 from suppliers_data import SUPPLIERS
 
 # --------- DATA FLATTENING ---------
 def flatten_suppliers(suppliers):
     """
-    Transforme la structure SUPPLIERS (liste de dicts imbriqués) en DataFrame plat,
-    avec latitude/longitude pour affichage Streamlit et tous les champs utiles.
+    Transform the nested SUPPLIERS structure into a flat DataFrame.
     """
     rows = []
     for s in suppliers:
@@ -29,18 +29,22 @@ def flatten_suppliers(suppliers):
 
 df = flatten_suppliers(SUPPLIERS)
 
-# --------- STREAMLIT APP ---------
+# --------- STREAMLIT APP SETUP ---------
 st.set_page_config(page_title="Airbus Suppliers Risk Dashboard", layout="wide")
 st.title("Airbus Suppliers Risk Dashboard")
 
 # Affichage du logo si présent
-import os
 logo_path = "airbus_logo.png"
 if os.path.exists(logo_path):
     st.image(logo_path, width=180)
 
-# Sidebar - Filtres interactifs
-st.sidebar.header("Filters")
+# --------- SIDEBAR: SCENARIO & FILTERS ---------
+st.sidebar.header("Scenario Simulation & Filters")
+scenario = st.sidebar.selectbox(
+    'Geopolitical Scenario Simulation',
+    ['None', 'Embargo', 'Strike', 'War']
+)
+impact = st.sidebar.slider('News impact on risk (adds to "Incidents"):', 0, 5, 0)
 selected_criticality = st.sidebar.multiselect(
     "Criticality", options=sorted(df["Criticality"].unique()), default=list(df["Criticality"].unique()))
 selected_country = st.sidebar.multiselect(
@@ -48,31 +52,46 @@ selected_country = st.sidebar.multiselect(
 selected_component = st.sidebar.multiselect(
     "Component", options=sorted(df["Component"].unique()), default=list(df["Component"].unique()))
 
-filtered_df = df[
-    df["Criticality"].isin(selected_criticality)
-    & df["Country"].isin(selected_country)
-    & df["Component"].isin(selected_component)
+# Apply scenario impact
+df_scenar = df.copy()
+if scenario == "Embargo":
+    df_scenar["Lead Time"] += 15
+    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + 2
+elif scenario == "Strike":
+    df_scenar["Lead Time"] += 10
+    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + 3
+elif scenario == "War":
+    df_scenar["Lead Time"] += 30
+    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + 6
+if impact:
+    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + impact
+
+# Filtered data
+filtered_df = df_scenar[
+    df_scenar["Criticality"].isin(selected_criticality)
+    & df_scenar["Country"].isin(selected_country)
+    & df_scenar["Component"].isin(selected_component)
 ]
 
-# Carte des sites fournisseurs
+# --------- MAP OF SUPPLIER SITES ---------
 st.subheader("Supplier Sites Map")
 if not filtered_df.empty and "latitude" in filtered_df.columns and "longitude" in filtered_df.columns:
     st.map(filtered_df[["latitude", "longitude"]])
 else:
     st.info("No supplier sites match your filters or missing coordinates.")
 
-# Tableau des fournisseurs
+# --------- SUPPLIERS TABLE ---------
 st.subheader("Suppliers Table")
 st.dataframe(filtered_df, use_container_width=True)
 
-# Statistiques globales
+# --------- GLOBAL STATISTICS ---------
 st.subheader("Global Statistics")
 col1, col2, col3 = st.columns(3)
 col1.metric("Unique Suppliers", filtered_df["Supplier"].nunique())
 col2.metric("Countries", filtered_df["Country"].nunique())
 col3.metric("Total Incidents", int(filtered_df["Incidents"].sum() if filtered_df["Incidents"].notnull().any() else 0))
 
-# Graphiques de synthèse
+# --------- RISK & PERFORMANCE OVERVIEW ---------
 st.subheader("Risk and Performance Overview")
 col4, col5 = st.columns(2)
 with col4:
@@ -80,14 +99,41 @@ with col4:
 with col5:
     st.bar_chart(filtered_df.groupby("Country")["On-Time Delivery (%)"].mean())
 
-# Détail par fournisseur
+# --------- SUPPLIER DETAILS ---------
 st.subheader("Supplier Details")
 suppliers = filtered_df["Supplier"].unique()
 if len(suppliers) > 0:
     selected_supplier = st.selectbox("Select a supplier for details", suppliers)
     supplier_details = filtered_df[filtered_df["Supplier"] == selected_supplier]
     st.write(supplier_details)
+
+    # Recommendations based on incidents and stock
+    high_incidents = supplier_details["Incidents"].max() >= 5
+    low_stock = supplier_details["Stock Days"].min() <= 10
+    st.markdown("**AI Recommendations:**")
+    if high_incidents and low_stock:
+        st.warning("🚨 High incident rate and low stock: consider dual sourcing and increase safety stock level.")
+    elif high_incidents:
+        st.warning("⚠️ High incident rate: increase monitoring, plan audits, and consider alternative suppliers.")
+    elif low_stock:
+        st.info("🔎 Low stock: consider increasing safety stock.")
+    else:
+        st.success("✅ No major risk detected for this supplier right now.")
+
+    # Export to Excel feature
+    if st.button("Export this supplier's data to Excel"):
+        excel_data = supplier_details.to_excel(index=False)
+        st.download_button(
+            label="Download Excel file",
+            data=excel_data,
+            file_name=f"{selected_supplier}_details.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 else:
     st.info("No supplier selected.")
 
+# --------- FOOTER ---------
 st.markdown("""
+---
+Developed for Airbus - Supply Chain Digital Twin · [2025]
+""")
