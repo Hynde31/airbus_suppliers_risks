@@ -5,9 +5,6 @@ from suppliers_data import SUPPLIERS
 
 # --------- DATA FLATTENING ---------
 def flatten_suppliers(suppliers):
-    """
-    Transform the nested SUPPLIERS structure into a flat DataFrame.
-    """
     rows = []
     for s in suppliers:
         for site in s["sites"]:
@@ -121,14 +118,16 @@ if len(suppliers) > 0:
         st.success("✅ No major risk detected for this supplier right now.")
 
     # Export to Excel feature
-    if st.button("Export this supplier's data to Excel"):
-        excel_data = supplier_details.to_excel(index=False)
-        st.download_button(
-            label="Download Excel file",
-            data=excel_data,
-            file_name=f"{selected_supplier}_details.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    import io
+    excel_buffer = io.BytesIO()
+    supplier_details.to_excel(excel_buffer, index=False)
+    excel_buffer.seek(0)
+    st.download_button(
+        label="Download Excel file",
+        data=excel_buffer,
+        file_name=f"{selected_supplier}_details.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 else:
     st.info("No supplier selected.")
 
