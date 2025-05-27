@@ -3,6 +3,13 @@ import pandas as pd
 import os
 from suppliers_data import SUPPLIERS
 
+st.set_page_config(page_title="Airbus Digital Twin Supply Chain Dashboard", layout="wide")
+
+import streamlit as st
+import pandas as pd
+import os
+from suppliers_data import SUPPLIERS
+
 # --------- DATA FLATTENING ---------
 def flatten_suppliers(suppliers):
     rows = []
