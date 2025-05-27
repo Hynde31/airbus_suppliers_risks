@@ -1,3 +1,5 @@
+# suppliers_data.py — structure complète des fournisseurs, sites, risques, incidents...
+
 SUPPLIERS = [
     {
         "name": "Safran",
