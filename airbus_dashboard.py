@@ -1,7 +1,13 @@
+import streamlit as st
 import pandas as pd
 from suppliers_data import SUPPLIERS
 
+# --------- DATA FLATTENING ---------
 def flatten_suppliers(suppliers):
+    """
+    Transforme la structure SUPPLIERS (liste de dicts imbriqués) en DataFrame plat,
+    avec latitude/longitude pour affichage Streamlit et tous les champs utiles.
+    """
     rows = []
     for s in suppliers:
         for site in s["sites"]:
@@ -12,68 +18,76 @@ def flatten_suppliers(suppliers):
                 "Dual Sourcing": "Yes" if s["dual_sourcing"] else "No",
                 "City": site["city"],
                 "Country": site["country"],
-                "latitude": site["lat"],     # IMPORTANT: colonne nommée latitude
-                "longitude": site["lon"],    # IMPORTANT: colonne nommée longitude
+                "latitude": site["lat"],
+                "longitude": site["lon"],
                 "Stock Days": site["stock_days"],
                 "Lead Time": site["lead_time"],
-                "On-Time Delivery": site.get("on_time_delivery", None),
+                "On-Time Delivery (%)": site.get("on_time_delivery", None),
                 "Incidents": site.get("incidents", None)
             })
     return pd.DataFrame(rows)
 
-# Exemple d'utilisation
 df = flatten_suppliers(SUPPLIERS)
-print(df.head())
 
-# Pour la carte Streamlit :
-import streamlit as st
-st.map(df[["latitude", "longitude"]])
+# --------- STREAMLIT APP ---------
+st.set_page_config(page_title="Airbus Suppliers Risk Dashboard", layout="wide")
+st.title("Airbus Suppliers Risk Dashboard")
 
-import streamlit as st
-import pandas as pd
-from supply_chain_utils import enrich_suppliers_with_risk, simulate_scenario
+# Affichage du logo si présent
+import os
+logo_path = "airbus_logo.png"
+if os.path.exists(logo_path):
+    st.image(logo_path, width=180)
 
-st.set_page_config(layout="wide", page_title="Airbus Supply Chain Risk Dashboard")
+# Sidebar - Filtres interactifs
+st.sidebar.header("Filters")
+selected_criticality = st.sidebar.multiselect(
+    "Criticality", options=sorted(df["Criticality"].unique()), default=list(df["Criticality"].unique()))
+selected_country = st.sidebar.multiselect(
+    "Country", options=sorted(df["Country"].unique()), default=list(df["Country"].unique()))
+selected_component = st.sidebar.multiselect(
+    "Component", options=sorted(df["Component"].unique()), default=list(df["Component"].unique()))
 
-st.title("🔴 Airbus Supply Chain Risk Dashboard - IA & Géopolitique")
-
-df = enrich_suppliers_with_risk()
-scenarios = [
-    {"label": "Aucun", "country": None, "delta_risk": 0},
-    {"label": "Embargo Maroc", "country": "Maroc", "delta_risk": 40},
-    {"label": "Grève France", "country": "France", "delta_risk": 25},
-    {"label": "Tensions USA", "country": "USA", "delta_risk": 30},
-    # Ajoute d'autres scénarios selon l'actualité
+filtered_df = df[
+    df["Criticality"].isin(selected_criticality)
+    & df["Country"].isin(selected_country)
+    & df["Component"].isin(selected_component)
 ]
 
-# Simulation de scénario
-scenario = st.sidebar.selectbox("Simulation géopolitique", [s["label"] for s in scenarios])
-chosen = next((s for s in scenarios if s["label"] == scenario), scenarios[0])
+# Carte des sites fournisseurs
+st.subheader("Supplier Sites Map")
+if not filtered_df.empty and "latitude" in filtered_df.columns and "longitude" in filtered_df.columns:
+    st.map(filtered_df[["latitude", "longitude"]])
+else:
+    st.info("No supplier sites match your filters or missing coordinates.")
 
-if chosen["country"]:
-    df = simulate_scenario(df, chosen)
+# Tableau des fournisseurs
+st.subheader("Suppliers Table")
+st.dataframe(filtered_df, use_container_width=True)
 
-# KPIs
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Fournisseurs à risque élevé", len(df[df["Geo Risk"] > 35]))
-col2.metric("Ruptures probables", len(df[df["Alert"] != ""]))
-col3.metric("Lead time moyen prédit", int(df["Predicted Lead Time"].mean()))
-col4.metric("Stock moyen (jours)", int(df["Stock Days"].mean()))
+# Statistiques globales
+st.subheader("Global Statistics")
+col1, col2, col3 = st.columns(3)
+col1.metric("Unique Suppliers", filtered_df["Supplier"].nunique())
+col2.metric("Countries", filtered_df["Country"].nunique())
+col3.metric("Total Incidents", int(filtered_df["Incidents"].sum() if filtered_df["Incidents"].notnull().any() else 0))
 
-# Carte des sites
-st.subheader("Carte mondiale des fournisseurs (couleur = risque géopolitique)")
-st.map(df.rename(columns={"Latitude": "lat", "Longitude": "lon"}))
+# Graphiques de synthèse
+st.subheader("Risk and Performance Overview")
+col4, col5 = st.columns(2)
+with col4:
+    st.bar_chart(filtered_df.groupby("Supplier")["Incidents"].sum())
+with col5:
+    st.bar_chart(filtered_df.groupby("Country")["On-Time Delivery (%)"].mean())
 
-# Tableau principal
-st.subheader("Détail par site/fournisseur")
-st.dataframe(df, use_container_width=True)
+# Détail par fournisseur
+st.subheader("Supplier Details")
+suppliers = filtered_df["Supplier"].unique()
+if len(suppliers) > 0:
+    selected_supplier = st.selectbox("Select a supplier for details", suppliers)
+    supplier_details = filtered_df[filtered_df["Supplier"] == selected_supplier]
+    st.write(supplier_details)
+else:
+    st.info("No supplier selected.")
 
-# Alertes et recommandations IA
-if df["Alert"].str.contains("Rupture").any():
-    st.warning("⚠️ Risque de rupture détecté !\n\nActions IA recommandées :")
-    for _, row in df[df["Alert"] == "Rupture probable"].iterrows():
-        st.markdown(f"- **{row['Supplier']} ({row['Site']})** : Activer sourcing alternatif, augmenter stock, prioriser expéditions, revoir plan de production.")
-
-# Export rapport
-if st.button("Exporter données (CSV)"):
-    st.download_button("Télécharger", df.to_csv(index=False), "supply_chain_report.csv")
+st.markdown("""
