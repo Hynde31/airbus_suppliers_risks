@@ -17,31 +17,24 @@ def flatten_suppliers(suppliers):
                 "Criticality": s["criticality"],
                 "Dual Sourcing": "Yes" if s["dual_sourcing"] else "No",
                 "Site City": site["city"],
-                "Site Country": site["country"],
-                "Latitude": site["lat"],
-                "Longitude": site["lon"],
+                "Country": site["country"],
+                "latitude": site["lat"],
+                "longitude": site["lon"],
                 "Stock Days": site["stock_days"],
                 "Lead Time": site["lead_time"],
-                "On-Time Delivery Rate (%)": site.get("on_time_delivery", 90),
-                "Incident Rate (/year)": site.get("incidents", 1)
+                "On-Time Delivery (%)": site.get("on_time_delivery", 90),
+                "Incidents": site.get("incidents", 1)
             })
     return pd.DataFrame(rows)
 
 df = flatten_suppliers(SUPPLIERS)
 
 # --- ADDITIONAL KPI DERIVED COLUMNS ---
-df["Risk Score"] = (1 - df["On-Time Delivery Rate (%)"]/100) \
-                   + (df["Incident Rate (/year)"]/10) \
+df["Risk Score"] = (1 - df["On-Time Delivery (%)"]/100) \
+                   + (df["Incidents"]/10) \
                    + (1 - df["Stock Days"]/60)*0.5 \
                    + (df["Lead Time"]/150)*0.5
 df["Risk Level"] = pd.cut(df["Risk Score"], bins=[-np.inf,0.5,1,2], labels=["Low","Medium","High"])
-
-# --- Harmonize column names for filters and charts
-df = df.rename(columns={
-    "Site Country": "Country",
-    "Incident Rate (/year)": "Incidents",
-    "On-Time Delivery Rate (%)": "On-Time Delivery (%)"
-})
 
 # --------- STREAMLIT APP SETUP ---------
 st.title("Airbus Suppliers Risk Dashboard")
@@ -65,21 +58,28 @@ selected_country = st.sidebar.multiselect(
 selected_component = st.sidebar.multiselect(
     "Component", options=sorted(df["Component"].unique()), default=list(df["Component"].unique()))
 
-# Apply scenario impact
+# --------- SCENARIO IMPACT ---------
 df_scenar = df.copy()
 if scenario == "Embargo":
     df_scenar["Lead Time"] += 15
-    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + 2
+    df_scenar["Incidents"] += 2
 elif scenario == "Strike":
     df_scenar["Lead Time"] += 10
-    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + 3
+    df_scenar["Incidents"] += 3
 elif scenario == "War":
     df_scenar["Lead Time"] += 30
-    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + 6
+    df_scenar["Incidents"] += 6
 if impact:
-    df_scenar["Incidents"] = df_scenar["Incidents"].fillna(0) + impact
+    df_scenar["Incidents"] += impact
 
-# Filtered data
+# Recalcule le score de risque après scénarios
+df_scenar["Risk Score"] = (1 - df_scenar["On-Time Delivery (%)"]/100) \
+                          + (df_scenar["Incidents"]/10) \
+                          + (1 - df_scenar["Stock Days"]/60)*0.5 \
+                          + (df_scenar["Lead Time"]/150)*0.5
+df_scenar["Risk Level"] = pd.cut(df_scenar["Risk Score"], bins=[-np.inf,0.5,1,2], labels=["Low","Medium","High"])
+
+# --------- FILTRAGE ---------
 filtered_df = df_scenar[
     df_scenar["Criticality"].isin(selected_criticality)
     & df_scenar["Country"].isin(selected_country)
@@ -88,8 +88,8 @@ filtered_df = df_scenar[
 
 # --------- MAP OF SUPPLIER SITES ---------
 st.subheader("Supplier Sites Map")
-if not filtered_df.empty and "Latitude" in filtered_df.columns and "Longitude" in filtered_df.columns:
-    st.map(filtered_df[["Latitude", "Longitude"]])
+if not filtered_df.empty and "latitude" in filtered_df.columns and "longitude" in filtered_df.columns:
+    st.map(filtered_df[["latitude", "longitude"]])
 else:
     st.info("No supplier sites match your filters or missing coordinates.")
 
