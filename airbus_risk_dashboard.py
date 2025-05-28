@@ -2,7 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+from datetime import datetime
 from suppliers_data import SUPPLIERS
+
+try:
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+except ImportError:
+    Presentation = None
 
 st.set_page_config(page_title="Airbus Suppliers Risk Dashboard", layout="wide")
 
@@ -29,7 +36,7 @@ def flatten_suppliers(suppliers):
 
 df = flatten_suppliers(SUPPLIERS)
 
-# --- ADDITIONAL KPI DERIVED COLUMNS ---
+# --- KPI DERIVED COLUMNS ---
 df["Risk Score"] = (1 - df["On-Time Delivery (%)"]/100) \
                    + (df["Incidents"]/10) \
                    + (1 - df["Stock Days"]/60)*0.5 \
@@ -37,8 +44,6 @@ df["Risk Score"] = (1 - df["On-Time Delivery (%)"]/100) \
 df["Risk Level"] = pd.cut(df["Risk Score"], bins=[-np.inf,0.5,1,2], labels=["Low","Medium","High"])
 
 st.title("Airbus Suppliers Risk Dashboard")
-
-# Affichage du logo si présent
 logo_path = "airbus_logo.png"
 if os.path.exists(logo_path):
     st.image(logo_path, width=180)
@@ -71,7 +76,6 @@ elif scenario == "War":
 if impact:
     df_scenar["Incidents"] += impact
 
-# Recalcule le score de risque après scénarios
 df_scenar["Risk Score"] = (1 - df_scenar["On-Time Delivery (%)"]/100) \
                           + (df_scenar["Incidents"]/10) \
                           + (1 - df_scenar["Stock Days"]/60)*0.5 \
@@ -87,8 +91,6 @@ filtered_df = df_scenar[
 
 # --------- MAP OF SUPPLIER SITES ---------
 st.subheader("Supplier Sites Map")
-
-# Vérifie l'existence des colonnes ET l'absence de valeurs nulles
 if (
     not filtered_df.empty and 
     "latitude" in filtered_df.columns and 
@@ -126,30 +128,81 @@ if len(suppliers) > 0:
     supplier_details = filtered_df[filtered_df["Supplier"] == selected_supplier]
     st.write(supplier_details)
 
-    # Recommendations based on incidents and stock
+    # --------- RECOMMANDATIONS CLAIRES ET SPECIFIQUES ---------
+    recs = []
     high_incidents = supplier_details["Incidents"].max() >= 5
     low_stock = supplier_details["Stock Days"].min() <= 10
-    st.markdown("**AI Recommendations:**")
-    if high_incidents and low_stock:
-        st.warning("🚨 High incident rate and low stock: consider dual sourcing and increase safety stock level.")
-    elif high_incidents:
-        st.warning("⚠️ High incident rate: increase monitoring, plan audits, and consider alternative suppliers.")
-    elif low_stock:
-        st.info("🔎 Low stock: consider increasing safety stock.")
-    else:
-        st.success("✅ No major risk detected for this supplier right now.")
+    low_delivery = supplier_details["On-Time Delivery (%)"].mean() < 85
+    high_risk = supplier_details["Risk Level"].str.contains("High").any()
 
-    # Export to Excel feature
+    if high_incidents:
+        recs.append("📍 Incident rate élevé : effectuer un audit qualité, renforcer le suivi et envisager une diversification des fournisseurs.")
+    if low_stock:
+        recs.append("🔎 Stock de sécurité faible : augmenter le niveau de stock pour éviter les ruptures d'approvisionnement.")
+    if low_delivery:
+        recs.append("⏰ Taux de livraison à l'heure insuffisant : revoir les processus logistiques et négocier des pénalités.")
+    if high_risk:
+        recs.append("🚩 Niveau de risque global élevé : planifier des visites sur site et mettre à jour le plan de continuité d'activité.")
+    if not recs:
+        recs.append("✅ Aucun risque majeur détecté. Maintenir la surveillance et poursuivre les bonnes pratiques.")
+
+    st.markdown("**AI Recommendations:**")
+    for r in recs:
+        st.write(r)
+    nowstr = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.markdown(f"_État généré le : **{nowstr}**_")
+
+    # --------- EXPORT EXCEL ---------
     import io
     excel_buffer = io.BytesIO()
-    supplier_details.to_excel(excel_buffer, index=False)
+    # On ajoute aussi les recommandations dans le fichier Excel
+    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+        supplier_details.to_excel(writer, sheet_name="Supplier Data", index=False)
+        # Ajoute les recommandations dans une nouvelle feuille
+        recs_df = pd.DataFrame({"Recommendations": recs})
+        recs_df.to_excel(writer, sheet_name="Recommendations", index=False)
+        pd.DataFrame({"Généré le": [nowstr]}).to_excel(writer, sheet_name="Date", index=False)
     excel_buffer.seek(0)
     st.download_button(
         label="Download Excel file",
         data=excel_buffer,
-        file_name=f"{selected_supplier}_details.xlsx",
+        file_name=f"{selected_supplier}_report_{nowstr.replace(':','-').replace(' ','_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+    # --------- EXPORT POWERPOINT ---------
+    if Presentation is not None:
+        ppt_buffer = io.BytesIO()
+        prs = Presentation()
+        # Slide 1 : Titre
+        slide = prs.slides.add_slide(prs.slide_layouts[0])
+        slide.shapes.title.text = f"Rapport fournisseur : {selected_supplier}"
+        slide.placeholders[1].text = f"État généré le {nowstr}"
+
+        # Slide 2 : Infos principales
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = "Données clés"
+        text = ""
+        for col in supplier_details.columns:
+            text += f"- {col} : {', '.join(str(x) for x in supplier_details[col].unique())}\n"
+        slide.placeholders[1].text = text
+
+        # Slide 3 : Recommandations
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = "AI Recommendations"
+        slide.placeholders[1].text = "\n".join(recs)
+
+        prs.save(ppt_buffer)
+        ppt_buffer.seek(0)
+        st.download_button(
+            label="Download PowerPoint file",
+            data=ppt_buffer,
+            file_name=f"{selected_supplier}_report_{nowstr.replace(':','-').replace(' ','_')}.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+    else:
+        st.info("Module python-pptx non installé : export PowerPoint indisponible.")
+
 else:
     st.info("No supplier selected.")
 
