@@ -15,18 +15,26 @@ def flatten_suppliers(suppliers):
                 "Component": s["component"],
                 "Criticality": s["criticality"],
                 "Dual Sourcing": "Yes" if s["dual_sourcing"] else "No",
-                "City": site["city"],
-                "Country": site["country"],
-                "latitude": site["lat"],
-                "longitude": site["lon"],
+                "Site City": site["city"],
+                "Site Country": site["country"],
+                "Latitude": site["lat"],
+                "Longitude": site["lon"],
                 "Stock Days": site["stock_days"],
                 "Lead Time": site["lead_time"],
-                "On-Time Delivery (%)": site.get("on_time_delivery", None),
-                "Incidents": site.get("incidents", None)
+                "On-Time Delivery Rate (%)": site.get("on_time_delivery", 90),
+                "Incident Rate (/year)": site.get("incidents", 1)
             })
     return pd.DataFrame(rows)
 
 df = flatten_suppliers(SUPPLIERS)
+
+# --- ADDITIONAL KPI DERIVED COLUMNS ---
+df["Risk Score"] = (1 - df["On-Time Delivery Rate (%)"]/100) \
+                   + (df["Incident Rate (/year)"]/10) \
+                   + (1 - df["Stock Days"]/60)*0.5 \
+                   + (df["Lead Time"]/150)*0.5
+df["Risk Level"] = pd.cut(df["Risk Score"], bins=[-np.inf,0.5,1,2], labels=["Low","Medium","High"])
+
 
 # --------- STREAMLIT APP SETUP ---------
 st.title("Airbus Suppliers Risk Dashboard")
