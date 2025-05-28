@@ -35,6 +35,12 @@ df["Risk Score"] = (1 - df["On-Time Delivery Rate (%)"]/100) \
                    + (df["Lead Time"]/150)*0.5
 df["Risk Level"] = pd.cut(df["Risk Score"], bins=[-np.inf,0.5,1,2], labels=["Low","Medium","High"])
 
+# --- Harmonize column names for filters and charts
+df = df.rename(columns={
+    "Site Country": "Country",
+    "Incident Rate (/year)": "Incidents",
+    "On-Time Delivery Rate (%)": "On-Time Delivery (%)"
+})
 
 # --------- STREAMLIT APP SETUP ---------
 st.title("Airbus Suppliers Risk Dashboard")
@@ -81,8 +87,8 @@ filtered_df = df_scenar[
 
 # --------- MAP OF SUPPLIER SITES ---------
 st.subheader("Supplier Sites Map")
-if not filtered_df.empty and "latitude" in filtered_df.columns and "longitude" in filtered_df.columns:
-    st.map(filtered_df[["latitude", "longitude"]])
+if not filtered_df.empty and "Latitude" in filtered_df.columns and "Longitude" in filtered_df.columns:
+    st.map(filtered_df[["Latitude", "Longitude"]])
 else:
     st.info("No supplier sites match your filters or missing coordinates.")
 
