@@ -196,5 +196,5 @@ else:
 # --------- FOOTER ---------
 st.markdown("""
 ---
-Developed for Airbus Commercial Aircraft - by Hynde EL HOUJJAJI - Subcontractor for Capgemini Engineering· [2025]
+Developed for Airbus Commercial Aircraft - by Hynde EL HOUJJAJI - Subcontractor of Capgemini Engineering· [2025]
 """)
