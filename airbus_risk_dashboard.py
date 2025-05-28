@@ -4,12 +4,7 @@ import numpy as np
 import os
 from datetime import datetime
 from suppliers_data import SUPPLIERS
-
-try:
-    from pptx import Presentation
-    from pptx.util import Inches, Pt
-except ImportError:
-    Presentation = None
+from pptx import Presentation
 
 st.set_page_config(page_title="Airbus Suppliers Risk Dashboard", layout="wide")
 
@@ -152,56 +147,36 @@ if len(suppliers) > 0:
     nowstr = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.markdown(f"_État généré le : **{nowstr}**_")
 
-    # --------- EXPORT EXCEL ---------
-    import io
-    excel_buffer = io.BytesIO()
-    # On ajoute aussi les recommandations dans le fichier Excel
-    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-        supplier_details.to_excel(writer, sheet_name="Supplier Data", index=False)
-        # Ajoute les recommandations dans une nouvelle feuille
-        recs_df = pd.DataFrame({"Recommendations": recs})
-        recs_df.to_excel(writer, sheet_name="Recommendations", index=False)
-        pd.DataFrame({"Généré le": [nowstr]}).to_excel(writer, sheet_name="Date", index=False)
-    excel_buffer.seek(0)
-    st.download_button(
-        label="Download Excel file",
-        data=excel_buffer,
-        file_name=f"{selected_supplier}_report_{nowstr.replace(':','-').replace(' ','_')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
     # --------- EXPORT POWERPOINT ---------
-    if Presentation is not None:
-        ppt_buffer = io.BytesIO()
-        prs = Presentation()
-        # Slide 1 : Titre
-        slide = prs.slides.add_slide(prs.slide_layouts[0])
-        slide.shapes.title.text = f"Rapport fournisseur : {selected_supplier}"
-        slide.placeholders[1].text = f"État généré le {nowstr}"
+    import io
+    ppt_buffer = io.BytesIO()
+    prs = Presentation()
+    # Slide 1 : Titre
+    slide = prs.slides.add_slide(prs.slide_layouts[0])
+    slide.shapes.title.text = f"Rapport fournisseur : {selected_supplier}"
+    slide.placeholders[1].text = f"État généré le {nowstr}"
 
-        # Slide 2 : Infos principales
-        slide = prs.slides.add_slide(prs.slide_layouts[1])
-        slide.shapes.title.text = "Données clés"
-        text = ""
-        for col in supplier_details.columns:
-            text += f"- {col} : {', '.join(str(x) for x in supplier_details[col].unique())}\n"
-        slide.placeholders[1].text = text
+    # Slide 2 : Infos principales
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    slide.shapes.title.text = "Données clés du fournisseur"
+    text = ""
+    for col in supplier_details.columns:
+        text += f"- {col} : {', '.join(str(x) for x in supplier_details[col].unique())}\n"
+    slide.placeholders[1].text = text
 
-        # Slide 3 : Recommandations
-        slide = prs.slides.add_slide(prs.slide_layouts[1])
-        slide.shapes.title.text = "AI Recommendations"
-        slide.placeholders[1].text = "\n".join(recs)
+    # Slide 3 : Recommandations
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    slide.shapes.title.text = "AI Recommendations"
+    slide.placeholders[1].text = "\n".join(recs)
 
-        prs.save(ppt_buffer)
-        ppt_buffer.seek(0)
-        st.download_button(
-            label="Download PowerPoint file",
-            data=ppt_buffer,
-            file_name=f"{selected_supplier}_report_{nowstr.replace(':','-').replace(' ','_')}.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        )
-    else:
-        st.info("Module python-pptx non installé : export PowerPoint indisponible.")
+    prs.save(ppt_buffer)
+    ppt_buffer.seek(0)
+    st.download_button(
+        label="Download PowerPoint file",
+        data=ppt_buffer,
+        file_name=f"{selected_supplier}_report_{nowstr.replace(':','-').replace(' ','_')}.pptx",
+        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
 
 else:
     st.info("No supplier selected.")
