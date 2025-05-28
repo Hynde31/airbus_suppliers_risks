@@ -3,8 +3,14 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
+
+# Gestion import pptx (PowerPoint)
+try:
+    from pptx import Presentation
+except ImportError:
+    Presentation = None
+
 from suppliers_data import SUPPLIERS
-from pptx import Presentation
 
 st.set_page_config(page_title="Airbus Suppliers Risk Dashboard", layout="wide")
 
@@ -149,34 +155,40 @@ if len(suppliers) > 0:
 
     # --------- EXPORT POWERPOINT ---------
     import io
-    ppt_buffer = io.BytesIO()
-    prs = Presentation()
-    # Slide 1 : Titre
-    slide = prs.slides.add_slide(prs.slide_layouts[0])
-    slide.shapes.title.text = f"Rapport fournisseur : {selected_supplier}"
-    slide.placeholders[1].text = f"État généré le {nowstr}"
+    if Presentation is not None:
+        ppt_buffer = io.BytesIO()
+        prs = Presentation()
+        # Slide 1 : Titre
+        slide = prs.slides.add_slide(prs.slide_layouts[0])
+        slide.shapes.title.text = f"Rapport fournisseur : {selected_supplier}"
+        slide.placeholders[1].text = f"État généré le {nowstr}"
 
-    # Slide 2 : Infos principales
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
-    slide.shapes.title.text = "Données clés du fournisseur"
-    text = ""
-    for col in supplier_details.columns:
-        text += f"- {col} : {', '.join(str(x) for x in supplier_details[col].unique())}\n"
-    slide.placeholders[1].text = text
+        # Slide 2 : Infos principales
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = "Données clés du fournisseur"
+        text = ""
+        for col in supplier_details.columns:
+            text += f"- {col} : {', '.join(str(x) for x in supplier_details[col].unique())}\n"
+        slide.placeholders[1].text = text
 
-    # Slide 3 : Recommandations
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
-    slide.shapes.title.text = "AI Recommendations"
-    slide.placeholders[1].text = "\n".join(recs)
+        # Slide 3 : Recommandations
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = "AI Recommendations"
+        slide.placeholders[1].text = "\n".join(recs)
 
-    prs.save(ppt_buffer)
-    ppt_buffer.seek(0)
-    st.download_button(
-        label="Download PowerPoint file",
-        data=ppt_buffer,
-        file_name=f"{selected_supplier}_report_{nowstr.replace(':','-').replace(' ','_')}.pptx",
-        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    )
+        prs.save(ppt_buffer)
+        ppt_buffer.seek(0)
+        st.download_button(
+            label="Download PowerPoint file",
+            data=ppt_buffer,
+            file_name=f"{selected_supplier}_report_{nowstr.replace(':','-').replace(' ','_')}.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+    else:
+        st.warning(
+            "Le module python-pptx n'est pas installé. "
+            "Ajoutez `python-pptx` à votre requirements.txt puis redémarrez l'application pour activer l'export PowerPoint."
+        )
 
 else:
     st.info("No supplier selected.")
