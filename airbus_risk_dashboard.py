@@ -196,5 +196,5 @@ else:
 # --------- FOOTER ---------
 st.markdown("""
 ---
-Developed for Airbus - Supply Chain Digital Twin · [2025]
+Developed for Airbus - by Hynde EL HOUJJAJI · [2025]
 """)
