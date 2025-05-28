@@ -84,7 +84,7 @@ SUPPLIERS = [
         ]
     },
     {
-        "name": "Supplier C",
+        "name": "Honeywell",
         "component": "Electrical Systems",
         "criticality": "Low",
         "dual_sourcing": True,
@@ -97,7 +97,7 @@ SUPPLIERS = [
                 "stock_days": 18,
                 "lead_time": 60,
                 "on_time_delivery": 94,
-                "incidents": 0
+                "incidents": 4
             }
         ]
     }
